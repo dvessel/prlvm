@@ -1,0 +1,240 @@
+#!/bin/bash
+
+# The path this script resides in.
+homeDir=`cd $(dirname "$0"); pwd`
+
+# Include files for aliases and functions.
+include=( $homeDir/prl-tools.sh )
+
+# Xterm ANSI colors.
+# 0-255 xterm-256 colors
+styleLabelStyles=(
+   240 # stopped
+   202 # suspended
+    28 # running
+)
+
+# Styles vm label.
+# http://en.wikipedia.org/wiki/ANSI_escape_code
+# Uses [38;5;*m - xterm-256 text color
+# $1 = label, $2 = index from $styleLabelStyles
+function styleLabel {
+   i=`itemSearch $2 stopped suspended running`
+   [[ -n $i ]] && printf '[38;5;%sm%s[0m\n' ${styleLabelStyles[i]} "$1" || "$1"
+}
+
+# Search for needle $1 in array haystack ${2[@]}
+# Emits the position of the found item starting from zero.
+# If nothing is found, nothings is emitted.
+function itemSearch {
+   needle=$1 && shift && haystack=($@)
+   i=0 && for n in "${haystack[@]}"; do
+      [[ $n == $needle ]] && echo $i && break || let i++
+   done
+}
+
+# Generate a list of all available VM's.
+vmListNames=() && vmListUUIDs=() && vmListStats=()
+function vmList {
+   [[ -n $f_template ]] && __template=--template
+   i=0 && while read l; do
+      let i++
+      vmListNames[$i]=`expr "$l" : '^\(.*\){.*'`
+      vmListUUIDs[$i]=`expr "$l" : '.*{\([^}]*\)}.*'`
+      vmListStats[$i]=`expr "$l" : '.*}\(.*\)$'`
+   done <<< "`prlctl list --no-header -ao name,uuid,status $__template`"
+}
+
+# Populate VM results from search.
+# Search query is case insensitive.
+# POSIX basic regular expressions are allowed.
+vmListSearchResults=()
+function vmListSearch {
+   # initialize full list
+   vmList
+   for i in ${!vmListUUIDs[@]}; do
+      if [[ -n `echo ${vmListNames[i]} ${vmListStats[i]} | egrep -i "$1"` ]]; then
+         vmListSearchResults[$i]=${vmListUUIDs[i]}
+      fi
+   done
+}
+
+# Executes commands.
+# Must pass in the index of the target VM.
+function vmExec {
+   it=$1
+   name=${vmListNames[it]}
+   uuid=${vmListUUIDs[it]}
+   stat=${vmListStats[it]}
+   shift
+   if   [[ -n `itemSearch $cmd ${acmds[@]}` ]]; then
+      # external alias.
+      eval $basecmd.$cmd
+   elif [[ -n `itemSearch $cmd ${fcmds[@]}` ]]; then
+      # external function.
+      $basecmd.$cmd "$@"
+   else
+      # core commands.
+      prlctl $cmd $uuid "$@"
+   fi
+}
+
+
+# Script name. Alias and function prefixes depends on this.
+basecmd=`basename "${0}"`
+args="$@"
+
+if [[ -z `compgen -A 'command' prlctl` ]]; then
+   printf '%s requires Parallels and the associated prlctl command line tool.\n' $basecmd
+   exit
+fi
+
+[[ -n $1 ]] && cmd=$1 && shift
+while [[ $1 == -* ]]; do
+   [[ -n `itemSearch $1 -at -ta` ]] && f_all=1 && f_template=1 && shift && continue
+   [[ -n `itemSearch $1 -a --all` ]] && f_all=1 && shift && continue
+   [[ -n `itemSearch $1 -t --template` ]] && f_template=1 && shift && continue
+   xusage=1 && break
+done
+
+
+# Valid commands. Omits commands that do not accept <vm_id> in prlctl.
+# @see man prlctl
+cmds=(
+   # Managing virtual machines
+   # create             -- vm_name for creation, vm_id cannot be used.
+   # convert            -- Uses path
+   clone
+   delete
+   exec
+   enter
+   console
+   pause
+   problem-report
+   # register           -- Uses path
+   reset
+   start
+   stop
+   status
+   unregister
+   suspend
+   resume
+   capture
+   reset-uptime
+   encrypt
+   decrypt
+   change-passwd
+   mount
+   umount
+
+   # Listing virtual machines
+   # list               -- Accepts name but doesn't quite fit. Use -l or --list.
+
+   # Backup and restore management
+   backup
+   backup-list
+   restore
+   backup-delete
+
+   # Migration management
+   # migrate            -- Uses [src/]ID
+
+   # Snapshot management
+   snapshot
+   snapshot-list
+   snapshot-delete
+   snapshot-switch
+
+   # Configuring VM resource parameters
+   set
+)
+
+# Include and process aliases and functions prefixed with 'basecmd.'.
+shopt -s expand_aliases
+for i in $include; do
+   [[ -f $i ]] && source $i || ( printf '%s not found.' $i && exit )
+done
+acmds=() && i=${#cmds[@]} && while read a; do
+   let i++ && cmds[$i]=$a && acmds[$i]=$a
+done <<< "`compgen -A 'alias' $basecmd. | cut -c$((${#basecmd} + 2))-`"
+fcmds=() && while read f; do
+   let i++ && cmds[$i]=$f && fcmds[$i]=$f
+done <<< "`compgen -A 'function' $basecmd. | cut -c$((${#basecmd} + 2))-`"
+
+
+# Check helper flags.
+case $cmd in
+   -c|--commands)
+      printf 'Commands:\n'
+      for i in ${cmds[@]}; do
+         [[ -n `itemSearch $i ${acmds[@]} ${fcmds[@]}` ]] && printf '* %s\n' $i || printf '  %s\n' $i
+      done
+      exit
+      ;;
+   -l|--list|-lt|-tl|-t|--template)
+      [[ -n `itemSearch $cmd -lt -tl -t --template` ]] && f_template=1
+      vmListSearch .
+      if [[ -n ${vmListSearchResults[@]} ]]; then
+         [[ -n $f_template ]] && printf 'Templates:\n' || printf 'Virtual Machines:\n'
+         for c in ${!vmListSearchResults[@]}; do
+            printf ' - ' && styleLabel "${vmListNames[c]}" ${vmListStats[c]}
+         done
+      else
+         printf 'Nothing available to list.\n'
+      fi
+      exit
+      ;;
+esac
+
+
+# Check usage.
+if [[ -n $cmd && -z `itemSearch $cmd ${cmds[@]}` ]]; then
+   xusage=1
+   printf 'Unknown command `%s`.\n' $cmd
+else
+   [[ -z $cmd ]] && xusage=1 && printf 'Missing command.\n'
+   [[ -z $1 ]]   && xusage=1 && printf 'Missing search.\n'
+fi
+if [[ -n $xusage ]]; then
+   printf 'Usage:\n  %s <command> [-a,--all][-t,--template] <search vm_[name|status]> [OPTIONS]\n' $basecmd
+   printf 'List commands:\n  %s [-c,--commands]\n' $basecmd
+   printf 'List virtual machines or templates:\n  %s [-l,--list][-t,--template]\n' $basecmd
+   exit
+fi
+
+
+# Search and invoke commands.
+search="$1" && shift
+vmListSearch $search
+
+if [[ -n ${vmListSearchResults[@]} ]]; then
+   if [[ ${#vmListSearchResults[@]} -gt 1 && -z $f_all ]]; then
+      choices=()
+      for c in ${!vmListSearchResults[@]}; do
+         choices[c]=`styleLabel "${vmListNames[c]}" ${vmListStats[c]}`
+      done
+      printf 'Select a Virtual Machine:\n'
+      select i in "${choices[@]}" Cancel; do
+         [[ $i == Cancel ]] && printf 'Canceled.\n' && exit
+         [[ -n $i && $REPLY -le ${#choices[@]} && $REPLY != 0 ]] && break
+         printf '   %s is not a valid choice.\n' $REPLY
+      done
+      vmExec $REPLY "$@"
+   else
+      # Experimental code to speed up execution commented out.
+      # Turn on monitor for job control.
+      # set -o monitor
+      for c in ${!vmListSearchResults[@]}; do
+         # Run in background.
+         vmExec $c "$@" # &
+         # Set jobs as an array.
+         # _jobs=(`jobs -pr`)
+         # If number of jobs is >= 4, wait for the first (oldest) to finish.
+         # [[ ${#_jobs[@]} -ge 4 ]] && wait ${_jobs[0]}
+      done
+      # Bring last job back to the foreground.
+      # fg $c # &> /dev/null
+   fi
+else
+   printf 'No results from search.\nList virtual machines or templates:\n  %s [-l,--list][-t,--template]\n' $basecmd && exit
+fi
