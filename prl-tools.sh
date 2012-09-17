@@ -51,3 +51,9 @@ function prlvm.stop {
   [[ $stat == suspended ]] && prlctl resume $uuid
   prlctl stop $uuid
 }
+
+# fix ubuntu loosing network interface after clone.
+function prlvm.clone {
+  prlctl clone $uuid "$@"
+}
+
