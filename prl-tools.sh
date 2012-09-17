@@ -45,3 +45,9 @@ function prlvm.foo {
   echo "  Matched Name: `styleLabel "$name" $stat`"
   echo "  Matched UUID: $uuid"
 }
+
+# Suspended vm's cannot be stopped. Resume first.
+function prlvm.stop {
+  [[ $stat == suspended ]] && prlctl resume $uuid
+  prlctl stop $uuid
+}
