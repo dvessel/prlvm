@@ -39,9 +39,9 @@ function vmList {
    [[ -n $f_template ]] && __template=--template
    i=0 && while read l; do
       let i++
-      vmListNames[$i]=`expr "$l" : '^\(.*\){.*'`
+      vmListNames[$i]=`expr "$l" : '^\(.*\){.*' | sed 's/ *$//g'`
       vmListUUIDs[$i]=`expr "$l" : '.*{\([^}]*\)}.*'`
-      vmListStats[$i]=`expr "$l" : '.*}\(.*\)$'`
+      vmListStats[$i]=`expr "$l" : '.*}\(.*\)$' | sed 's/^ *//g'`
    done <<< "`prlctl list --no-header -ao name,uuid,status $__template`"
 }
 
