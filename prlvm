@@ -20,7 +20,7 @@ styleLabelStyles=(
 # $1 = label, $2 = index from $styleLabelStyles
 function styleLabel {
   i=`itemSearch $2 stopped suspended running`
-  [[ -n $i ]] && printf '[38;5;%sm%s[0m\n' ${styleLabelStyles[i]} "$1" || "$1"
+  printf '[38;5;%sm%s[0m' ${styleLabelStyles[i]} "$1"
 }
 
 # Search for needle $1 in array haystack ${2[@]}
