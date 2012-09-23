@@ -62,11 +62,10 @@ function vmListSearch {
 # Executes commands.
 # Must pass in the index of the target VM.
 function vmExec {
-  it=$1
+  it=$1 && shift
   name=${vmListNames[it]}
   uuid=${vmListUUIDs[it]}
   stat=${vmListStats[it]}
-  shift
   if   [[ -n `itemSearch $cmd ${acmds[@]}` ]]; then
     # external alias.
     eval $basecmd.$cmd
