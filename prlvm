@@ -176,7 +176,7 @@ case $cmd in
     if [[ -n ${vmListSearchResults[@]} ]]; then
       [[ -n $f_template ]] && printf 'Templates:\n' || printf 'Virtual Machines:\n'
       for c in ${!vmListSearchResults[@]}; do
-        printf ' - ' && styleLabel "${vmListNames[c]}" ${vmListStats[c]}
+        printf ' - %s\n' "`styleLabel "${vmListNames[c]}" ${vmListStats[c]}`"
       done
     else
       printf 'Nothing available to list.\n'
