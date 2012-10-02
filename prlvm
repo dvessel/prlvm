@@ -208,9 +208,10 @@ vmListSearch $search
 
 if [[ -n ${vmListSearchResults[@]} ]]; then
   if [[ ${#vmListSearchResults[@]} -gt 1 && -z $f_all ]]; then
-    choices=()
-    for c in ${!vmListSearchResults[@]}; do
-      choices[c]="`styleLabel "${vmListNames[c]}" ${vmListStats[c]}`n"
+    choices=() && m=()
+    i=0 && for c in ${!vmListSearchResults[@]}; do
+      m[++i]=$c
+      choices[i]="`styleLabel "${vmListNames[c]}" ${vmListStats[c]}`"
     done
     printf 'Select a Virtual Machine:\n'
     select i in "${choices[@]}" Cancel; do
@@ -218,7 +219,7 @@ if [[ -n ${vmListSearchResults[@]} ]]; then
       [[ -n $i && $REPLY -le ${#choices[@]} && $REPLY != 0 ]] && break
       printf '   %s is not a valid choice.\n' $REPLY
     done
-    vmExec $REPLY "$@"
+    vmExec ${m[REPLY]} "$@"
   else
     # Experimental code to speed up execution commented out.
     # Turn on monitor for job control.
