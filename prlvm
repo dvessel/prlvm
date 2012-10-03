@@ -211,12 +211,12 @@ if [[ -n ${vmListSearchResults[@]} ]]; then
     choices=() && m=()
     i=0 && for c in ${!vmListSearchResults[@]}; do
       m[++i]=$c
-      choices[i]="`styleLabel "${vmListNames[c]}" ${vmListStats[c]}`"
+      choices[i]=`styleLabel "${vmListNames[c]}" ${vmListStats[c]}`n
     done
-    printf 'Select a Virtual Machine: (0 or c to cancel)\n'
+    printf 'Select a Virtual Machine: (c to cancel)\n'
     select i in "${choices[@]}"; do
-      [[ -n `itemSearch $REPLY 0 c` ]] && printf 'Canceled.\n' && exit
-      [[ -n $i && $REPLY -le ${#choices[@]} && $REPLY != 0 ]] && break
+      [[ $REPLY == [1-9]* && $REPLY -le ${#choices[@]} ]] && break
+      [[ $REPLY == 'c' ]] && printf 'Canceled.\n' && exit
       printf '   %s is not a valid choice.\n' $REPLY
     done
     vmExec ${m[REPLY]} "$@"
